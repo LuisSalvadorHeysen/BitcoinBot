@@ -1,7 +1,7 @@
 # BitcoinBot
 
 ## Introduction
-This project is an algorithmic trading bot for cryptocurrencies. It currently uses the public CoinGecko API to fetch historical price data for Ethereum (ETH/USD) and applies a machine learning model (Linear Regression) to predict short-term price movements. **Trading logic is not implemented yet.**
+This project is an algorithmic trading bot for cryptocurrencies. It currently uses the public CoinGecko API to fetch historical price data for Bitcoin (BTC/USD) and applies a machine learning model (Linear Regression) to predict short-term price movements. **Trading logic is not implemented yet.**
 
 ## Features
 - Retrieves crypto market data from CoinGecko (no API key required)
@@ -27,8 +27,8 @@ This project is an algorithmic trading bot for cryptocurrencies. It currently us
    ```
 
 ## How It Works
-- Fetches the last 100 minutes of ETH/USD price data from CoinGecko
-- Saves the data to `project3/data/ethereum_usd.csv`
+- Fetches the last 100 minutes of BTC/USD price data from CoinGecko
+- Saves the data to `project3/data/bitcoin_usd.csv`
 - Trains a Linear Regression model to predict the next minute's price
 - Prints the current and predicted next price every iteration
 - Handles errors gracefully and continues running
