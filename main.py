@@ -14,11 +14,12 @@ HISTORY_MINUTES = 100
 # Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)
 
-def fetch_coingecko_data(symbol, vs_currency, minutes=100):
+def fetch_coingecko_data(symbol, vs_currency, minutes=None):
     url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart"
     params = {
         "vs_currency": vs_currency,
-        "days": 1  # 1 day (CoinGecko returns up to 288 5-min points)
+        "days": 1,  # 1 day gives us minute-by-minute data
+        "interval": "minute"
     }
     headers = {
         'User-Agent': 'Mozilla/5.0 (compatible; BitcoinBot/1.0; +https://github.com/yourusername/bitcoinbot)'
@@ -26,9 +27,9 @@ def fetch_coingecko_data(symbol, vs_currency, minutes=100):
     response = requests.get(url, params=params, headers=headers)
     response.raise_for_status()
     data = response.json()
-    # data['prices'] is a list of [timestamp, price]
-    # data['market_caps'], data['total_volumes'] also available
-    prices = data['prices'][-minutes:]
+    prices = data['prices']
+    if minutes:
+        prices = prices[-minutes:]
     df = pd.DataFrame(prices, columns=['timestamp', 'close'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     # For ML, we need open, high, low, close. We'll approximate:
@@ -37,6 +38,46 @@ def fetch_coingecko_data(symbol, vs_currency, minutes=100):
     df['low'] = df[['open', 'close']].min(axis=1)
     df = df.dropna().reset_index(drop=True)
     return df
+
+def fetch_multiple_days(symbol, vs_currency, num_days=7):
+    """Fetch multiple days of minute data by making multiple API calls"""
+    all_data = []
+    
+    for day in range(num_days):
+        url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart"
+        params = {
+            "vs_currency": vs_currency,
+            "days": 1,
+            "interval": "minute"
+        }
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (compatible; BitcoinBot/1.0; +https://github.com/yourusername/bitcoinbot)'
+        }
+        
+        # Calculate the date for this iteration
+        from datetime import datetime, timedelta
+        target_date = datetime.now() - timedelta(days=day)
+        
+        response = requests.get(url, params=params, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        
+        df = pd.DataFrame(data['prices'], columns=['timestamp', 'close'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df['open'] = df['close'].shift(1)
+        df['high'] = df[['open', 'close']].max(axis=1)
+        df['low'] = df[['open', 'close']].min(axis=1)
+        df = df.dropna()
+        
+        all_data.append(df)
+        
+        # Rate limiting - be nice to the API
+        time.sleep(1)
+    
+    # Combine all data and sort by timestamp
+    combined_df = pd.concat(all_data, ignore_index=True)
+    combined_df = combined_df.sort_values('timestamp').reset_index(drop=True)
+    return combined_df
 
 def save_data(df, symbol):
     file_name = symbol + '_' + VS_CURRENCY + '.csv'

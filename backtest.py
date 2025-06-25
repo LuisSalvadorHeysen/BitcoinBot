@@ -8,13 +8,13 @@ import matplotlib.pyplot as plt
 
 # --- Simulation Settings ---
 DATA_FILE = 'project3/data/bitcoin_usd.csv'
-INITIAL_CASH = 10000  # USD
-WINDOW = 30  # Rolling window size for training
+INITIAL_CASH = 500000  # USD
+WINDOW = 60  # Rolling window size for training (increased for more context)
 
 # --- Realism Settings ---
 FEE_RATE = 0.001  # 0.1% fee per trade
 SLIPPAGE_RATE = 0.0005  # 0.05% random slippage
-HOLD_THRESHOLD = 0.002 # Must predict a 0.2% move to overcome fees+slippage
+HOLD_THRESHOLD = 0.0005 # Lowered to 0.05% to allow more trades
 
 # Load data
 df = pd.read_csv(DATA_FILE, parse_dates=['timestamp'])
@@ -80,7 +80,7 @@ for i in range(WINDOW, len(ml_df) - 1):
         trade_action = 'SELL'
         trade_log.append((current_time, 'SELL', sell_price, btc, fee))
 
-    if i % 10 == 0:
+    if i % 1 == 0:  # Print every step for better visibility
         print(f"{current_time} - Price: ${current_price:,.2f}, Predicted Move: {pct_move:+.4f}%, Action: {trade_action}")
 
     portfolio_value = cash + btc * current_price
@@ -91,7 +91,12 @@ print("Backtest finished.")
 returns_df = pd.DataFrame(portfolio_values, columns=['value'])
 returns_df['daily_return'] = returns_df['value'].pct_change()
 
-sharpe_ratio = (returns_df['daily_return'].mean() / returns_df['daily_return'].std()) * np.sqrt(252) # Annualized
+std_return = returns_df['daily_return'].std()
+if std_return and not np.isnan(std_return):
+    sharpe_ratio = (returns_df['daily_return'].mean() / std_return) * np.sqrt(252)
+    sharpe_str = f"{sharpe_ratio:.2f}"
+else:
+    sharpe_str = "N/A (insufficient return variance)"
 
 peak = returns_df['value'].expanding(min_periods=1).max()
 drawdown = (returns_df['value'] - peak) / peak
@@ -100,7 +105,7 @@ max_drawdown = drawdown.min()
 print("\n--- Performance Metrics ---")
 print(f"Final Portfolio Value: ${portfolio_values[-1]:,.2f}")
 print(f"Total Return: {(portfolio_values[-1] - INITIAL_CASH) / INITIAL_CASH * 100:.2f}%")
-print(f"Annualized Sharpe Ratio: {sharpe_ratio:.2f}")
+print(f"Annualized Sharpe Ratio: {sharpe_str}")
 print(f"Maximum Drawdown: {max_drawdown*100:.2f}%")
 if trade_log:
     log_df = pd.DataFrame(trade_log, columns=['Timestamp', 'Action', 'Price', 'Quantity', 'Fee (USD)'])
