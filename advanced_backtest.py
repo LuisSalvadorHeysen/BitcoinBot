@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import yfinance as yf
 import shap
 import warnings
+import os
 
 # --- Simulation Settings ---
 DATA_FILE = 'project3/data/spy_usd.csv'
@@ -327,7 +328,9 @@ def plot_advanced_results(results):
     plt.grid(True)
     
     plt.tight_layout()
-    plt.savefig('portfolio_value_advanced.png', dpi=300, bbox_inches='tight')
+    os.makedirs('graphs/advanced_backtest', exist_ok=True)
+    plt.savefig('graphs/advanced_backtest/portfolio_value_advanced.png', dpi=300, bbox_inches='tight')
+    print('Saved advanced performance plot as graphs/advanced_backtest/portfolio_value_advanced.png')
     plt.close()
 
 def walkforward_backtest(df, test_days=30):
@@ -426,7 +429,7 @@ def main():
     
     # Plot results
     plot_advanced_results(results)
-    print("Performance plot saved as portfolio_value_advanced.png")
+    print("Performance plot saved as graphs/advanced_backtest/portfolio_value_advanced.png")
 
     # Run walk-forward out-of-sample backtest
     print("Running walk-forward out-of-sample backtest (last 30 days)...")

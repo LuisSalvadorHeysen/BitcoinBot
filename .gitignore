@@ -8,6 +8,8 @@ project3/data/*.csv
 
 # Generated plots and outputs
 *.png
+!graphs/
+!graphs/**/*.png
 *.jpg
 *.jpeg
 *.pdf

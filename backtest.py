@@ -24,6 +24,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import yfinance as yf
 import warnings
+import os
 
 warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
 
@@ -388,8 +389,9 @@ def main():
     plt.xlabel('Date')
     plt.ylabel('Portfolio Value (USD)')
     plt.tight_layout()
-    plt.savefig('spy_walkforward_portfolio.png')
-    print('Saved plot as spy_walkforward_portfolio.png')
+    os.makedirs('graphs/backtest', exist_ok=True)
+    plt.savefig('graphs/backtest/spy_walkforward_portfolio.png')
+    print('Saved plot as graphs/backtest/spy_walkforward_portfolio.png')
     # Stats
     returns = pd.Series(portfolio_values).pct_change().dropna()
     sharpe = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0

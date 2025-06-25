@@ -184,4 +184,4 @@ This project is for **educational purposes only**. It is not financial advice. S
 
 ---
 
-**Built with ❤️ for educational purposes** 
+**Built educational purposes** 

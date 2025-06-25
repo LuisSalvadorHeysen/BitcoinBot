@@ -4,6 +4,7 @@ import requests
 from sklearn.ensemble import RandomForestRegressor
 import matplotlib.pyplot as plt
 import time
+import os
 
 # --- Config ---
 SYMBOL = 'bitcoin'  # CoinGecko ID for BTC
@@ -122,8 +123,9 @@ def main():
     plt.xlabel('Date')
     plt.ylabel('Portfolio Value (USD)')
     plt.tight_layout()
-    plt.savefig('crypto_walkforward_portfolio.png')
-    print('Saved plot as crypto_walkforward_portfolio.png')
+    os.makedirs('graphs/crypto_backtest', exist_ok=True)
+    plt.savefig('graphs/crypto_backtest/crypto_walkforward_portfolio.png')
+    print('Saved plot as graphs/crypto_backtest/crypto_walkforward_portfolio.png')
     # Stats
     returns = pd.Series(portfolio_values).pct_change().dropna()
     sharpe = returns.mean() / returns.std() * np.sqrt(365) if returns.std() > 0 else 0
