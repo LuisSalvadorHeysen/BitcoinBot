@@ -1,105 +1,89 @@
+"""
+BitcoinBot: Data Fetching and Live Prediction Module
+
+This module fetches stock price data from Yahoo Finance API and provides
+real-time price predictions using a simple Linear Regression model.
+
+Usage:
+    python main.py  # Run continuous data fetching and prediction
+"""
+
 import os
 import time
 import pandas as pd
-import requests
+import yfinance as yf
 from sklearn.linear_model import LinearRegression
 
 # Settings
-SYMBOL = 'bitcoin'  # CoinGecko uses coin names
-VS_CURRENCY = 'usd'
+SYMBOL = 'SPY'  # S&P 500 ETF - generally trends upward
 DATA_DIR = 'project3/data'
-INTERVAL_MINUTES = 1
 HISTORY_MINUTES = 100
 
 # Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)
 
-def fetch_coingecko_data(symbol, vs_currency, minutes=None):
-    url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart"
-    params = {
-        "vs_currency": vs_currency,
-        "days": 1,  # 1 day gives us minute-by-minute data
-        "interval": "minute"
-    }
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (compatible; BitcoinBot/1.0; +https://github.com/yourusername/bitcoinbot)'
-    }
-    response = requests.get(url, params=params, headers=headers)
-    response.raise_for_status()
-    data = response.json()
-    prices = data['prices']
+def fetch_stock_data(symbol, minutes=None):
+    """
+    Fetch stock price data from Yahoo Finance API.
+    
+    Args:
+        symbol (str): Stock symbol (e.g., 'SPY')
+        minutes (int, optional): Number of minutes to fetch
+    
+    Returns:
+        pd.DataFrame: DataFrame with timestamp, open, high, low, close prices
+    """
+    # Get 1 day of 1-minute data
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period="1d", interval="1m")
+    
+    # Reset index to get timestamp as column
+    df = df.reset_index()
+    
+    # The index column is 'Datetime', rename it to 'timestamp'
+    if 'Datetime' in df.columns:
+        df = df.rename(columns={'Datetime': 'timestamp'})
+    
+    # Select only the OHLC columns we need
+    df = df[['timestamp', 'Open', 'High', 'Low', 'Close']].copy()
+    df.columns = ['timestamp', 'open', 'high', 'low', 'close']
+    
     if minutes:
-        prices = prices[-minutes:]
-    df = pd.DataFrame(prices, columns=['timestamp', 'close'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    # For ML, we need open, high, low, close. We'll approximate:
-    df['open'] = df['close'].shift(1)
-    df['high'] = df[['open', 'close']].max(axis=1)
-    df['low'] = df[['open', 'close']].min(axis=1)
-    df = df.dropna().reset_index(drop=True)
-    return df
-
-def fetch_multiple_days(symbol, vs_currency, num_days=7):
-    """Fetch multiple days of minute data by making multiple API calls"""
-    all_data = []
+        df = df.tail(minutes)
     
-    for day in range(num_days):
-        url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart"
-        params = {
-            "vs_currency": vs_currency,
-            "days": 1,
-            "interval": "minute"
-        }
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (compatible; BitcoinBot/1.0; +https://github.com/yourusername/bitcoinbot)'
-        }
-        
-        # Calculate the date for this iteration
-        from datetime import datetime, timedelta
-        target_date = datetime.now() - timedelta(days=day)
-        
-        response = requests.get(url, params=params, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        
-        df = pd.DataFrame(data['prices'], columns=['timestamp', 'close'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        df['open'] = df['close'].shift(1)
-        df['high'] = df[['open', 'close']].max(axis=1)
-        df['low'] = df[['open', 'close']].min(axis=1)
-        df = df.dropna()
-        
-        all_data.append(df)
-        
-        # Rate limiting - be nice to the API
-        time.sleep(1)
-    
-    # Combine all data and sort by timestamp
-    combined_df = pd.concat(all_data, ignore_index=True)
-    combined_df = combined_df.sort_values('timestamp').reset_index(drop=True)
-    return combined_df
+    return df.reset_index(drop=True)
 
 def save_data(df, symbol):
-    file_name = symbol + '_' + VS_CURRENCY + '.csv'
+    """Save DataFrame to CSV file in the data directory."""
+    file_name = symbol.lower() + '_usd.csv'
     output_file_path = os.path.join(DATA_DIR, file_name)
     df.to_csv(output_file_path, index=False)
     print(f"Saved data to {output_file_path}")
 
 def prepare_ml_data(df):
+    """Prepare data for machine learning model training."""
     ml_df = df[['close', 'high', 'low', 'open']].copy()
     ml_df['next_output'] = ml_df['close'].shift(-1)
     ml_df = ml_df.dropna()
     return ml_df
 
 def main():
+    """
+    Main function that continuously fetches data, trains model, and makes predictions.
+    Runs in an infinite loop with 60-second intervals.
+    """
+    print("StockBot: Starting data fetching and prediction...")
+    print(f"Fetching {SYMBOL} price data every 60 seconds")
+    print("Press Ctrl+C to stop")
+    
     while True:
         try:
             # Fetch and save data
-            crypto_data = fetch_coingecko_data(SYMBOL, VS_CURRENCY, HISTORY_MINUTES)
-            save_data(crypto_data, SYMBOL)
+            stock_data = fetch_stock_data(SYMBOL, HISTORY_MINUTES)
+            save_data(stock_data, SYMBOL)
 
             # Prepare ML data
-            ml_df = prepare_ml_data(crypto_data)
+            ml_df = prepare_ml_data(stock_data)
             if len(ml_df) < 10:
                 print("Not enough data to train model.")
                 time.sleep(60)
@@ -117,9 +101,15 @@ def main():
             latest_row = test_data.iloc[0]
             X_pred = latest_row[['close', 'high', 'low', 'open']].values.reshape(1, -1)
             predicted_next = model.predict(X_pred)[0]
-            print(f"Current price: {latest_row['close']:.2f}, Predicted next: {predicted_next:.2f}")
+            current_price = latest_row['close']
+            pct_change = ((predicted_next - current_price) / current_price) * 100
+            
+            print(f"Current price: ${current_price:,.2f}, Predicted next: ${predicted_next:,.2f} ({pct_change:+.2f}%)")
 
             time.sleep(60)
+        except KeyboardInterrupt:
+            print("\nStockBot stopped by user.")
+            break
         except Exception as e:
             print(f"An error occurred: {e}")
             time.sleep(60)

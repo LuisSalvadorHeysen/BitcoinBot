@@ -1,14 +1,14 @@
-# BitcoinBot: Educational Algorithmic Trading Bot
+# StockBot: Educational Algorithmic Trading Bot
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Educational-orange.svg)]()
 
-A comprehensive, educational algorithmic trading bot for Bitcoin that demonstrates machine learning, backtesting, and explainable AI (XAI) in cryptocurrency trading.
+A comprehensive, educational algorithmic trading bot for SPY (S&P 500 ETF) that demonstrates machine learning, backtesting, and explainable AI (XAI) in stock trading.
 
 ## 🎯 Overview
 
-This project showcases the development of a realistic Bitcoin trading bot using:
+This project showcases the development of a realistic stock trading bot using:
 - **Machine Learning**: Random Forest and Linear Regression models
 - **Technical Analysis**: 18+ technical indicators (RSI, MACD, Bollinger Bands, etc.)
 - **Realistic Backtesting**: Transaction fees, slippage, and portfolio management
@@ -24,13 +24,12 @@ This project showcases the development of a realistic Bitcoin trading bot using:
 - **Prediction Confidence**: Model explains its trading decisions
 
 ### 📊 Data & Analysis
-- **Real-time Data**: CoinGecko API integration for live Bitcoin prices
+- **Real-time Data**: Yahoo Finance API integration for live SPY prices
 - **Technical Indicators**: SMA, EMA, RSI, MACD, Bollinger Bands, and more
 - **Performance Metrics**: Sharpe ratio, maximum drawdown, total returns
 - **Trade Logging**: Detailed CSV logs of all transactions
 
 ### 🎓 Educational Components
-- **Jupyter Notebook**: Step-by-step tutorial with explanations
 - **Modular Code**: Clean, well-documented functions
 - **Visualizations**: Portfolio performance and feature importance plots
 - **Best Practices**: Realistic trading simulation with fees and slippage
@@ -39,12 +38,12 @@ This project showcases the development of a realistic Bitcoin trading bot using:
 
 ### Prerequisites
 ```bash
-pip install pandas numpy scikit-learn matplotlib requests shap
+pip install -r requirements.txt
 ```
 
 ### Basic Usage
 ```bash
-# Fetch latest Bitcoin data
+# Fetch latest SPY data and run live predictions
 python main.py
 
 # Run backtesting simulation
@@ -54,12 +53,6 @@ python backtest.py
 python advanced_backtest.py
 ```
 
-### Jupyter Notebook
-```bash
-# Open the educational notebook
-jupyter notebook BitcoinBot_Educational.ipynb
-```
-
 ## 📁 Project Structure
 
 ```
@@ -67,11 +60,10 @@ BitcoinBot/
 ├── main.py                      # Data fetching and live prediction
 ├── backtest.py                  # Basic backtesting simulation
 ├── advanced_backtest.py         # Advanced ML backtesting
-├── BitcoinBot_Educational.ipynb # Educational Jupyter notebook
 ├── requirements.txt             # Python dependencies
 ├── project3/
 │   └── data/                   # Historical data storage
-│       └── bitcoin_usd.csv     # Bitcoin price data
+│       └── spy_usd.csv         # SPY price data
 ├── *.png                       # Generated plots and visualizations
 └── *.csv                       # Trade logs and performance data
 ```
@@ -130,9 +122,9 @@ This project demonstrates:
 
 ## 🔮 Future Enhancements
 
-- [ ] **Live Trading**: Integration with crypto exchanges
+- [ ] **Live Trading**: Integration with stock brokers
 - [ ] **Advanced Models**: LSTM, Transformer models for time series
-- [ ] **Multi-Asset**: Support for Ethereum, other cryptocurrencies
+- [ ] **Multi-Asset**: Support for other ETFs and stocks
 - [ ] **Web Dashboard**: Real-time monitoring and control interface
 - [ ] **Risk Management**: Stop-loss, take-profit, and position sizing
 - [ ] **Sentiment Analysis**: News and social media integration
@@ -151,12 +143,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## ⚠️ Disclaimer
 
-This project is for **educational purposes only**. It is not financial advice. Cryptocurrency trading involves substantial risk of loss. Always do your own research and consider consulting with a financial advisor before making investment decisions.
+This project is for **educational purposes only**. It is not financial advice. Stock trading involves substantial risk of loss. Always do your own research and consider consulting with a financial advisor before making investment decisions.
 
 ## 📞 Contact
 
 - **GitHub**: [@LuisSalvadorHeysen](https://github.com/LuisSalvadorHeysen)
-- **Project**: [BitcoinBot Repository](https://github.com/LuisSalvadorHeysen/BitcoinBot)
+- **Project**: [StockBot Repository](https://github.com/LuisSalvadorHeysen/BitcoinBot)
 
 ---
 
