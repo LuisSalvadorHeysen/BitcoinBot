@@ -270,12 +270,13 @@ def generate_shap_analysis(ml_df):
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(X)
     
+    os.makedirs('graphs/advanced_backtest', exist_ok=True)
     # Plot SHAP summary
     plt.figure(figsize=(10, 8))
     shap.summary_plot(shap_values, X, plot_type="bar", show=False)
     plt.title('SHAP Feature Importance Summary')
     plt.tight_layout()
-    plt.savefig('shap_summary.png', dpi=300, bbox_inches='tight')
+    plt.savefig('graphs/advanced_backtest/shap_summary.png', dpi=300, bbox_inches='tight')
     plt.close()
     
     # Plot feature importance
@@ -289,7 +290,7 @@ def generate_shap_analysis(ml_df):
     plt.title('Feature Importance (Random Forest)')
     plt.xlabel('Importance')
     plt.tight_layout()
-    plt.savefig('feature_importance.png')
+    plt.savefig('graphs/advanced_backtest/feature_importance.png')
     plt.close()
 
 def plot_advanced_results(results):
@@ -449,8 +450,9 @@ def main():
     plt.xlabel('Date')
     plt.ylabel('Portfolio Value (USD)')
     plt.tight_layout()
-    plt.savefig('spy_advanced_walkforward_portfolio.png')
-    print('Saved plot as spy_advanced_walkforward_portfolio.png')
+    os.makedirs('graphs/advanced_backtest', exist_ok=True)
+    plt.savefig('graphs/advanced_backtest/spy_advanced_walkforward_portfolio.png')
+    print('Saved plot as graphs/advanced_backtest/spy_advanced_walkforward_portfolio.png')
     # Stats
     returns = pd.Series(portfolio_values).pct_change().dropna()
     sharpe = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0

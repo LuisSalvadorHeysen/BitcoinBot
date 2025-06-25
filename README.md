@@ -82,7 +82,10 @@ BitcoinBot/
 │   └── data/
 │       ├── spy_usd.csv          # Recent SPY data (live)
 │       ├── spy_historical.csv   # Historical SPY data (for training/backtest)
-├── *.png                        # Generated plots and visualizations
+├── graphs/
+│   ├── advanced_backtest/       # Advanced SPY plots (feature importance, SHAP, portfolio)
+│   ├── backtest/                # Standard SPY backtest plots
+│   └── crypto_backtest/         # Crypto (BTC/USD) backtest plots
 ├── *.csv                        # Trade logs and performance data
 ├── LICENSE, CONTRIBUTING.md, .gitignore
 ```
@@ -102,10 +105,13 @@ Total Trades: 12
 ```
 
 ### Sample Visualizations
-- `portfolio_value_advanced.png`: SPY portfolio value over time
-- `crypto_walkforward_portfolio.png`: BTC/USD walk-forward portfolio value
-- `feature_importance.png`: Feature importance (Random Forest)
-- `shap_summary.png`: SHAP summary plot (explainable AI)
+- `graphs/advanced_backtest/portfolio_value_advanced.png`: SPY portfolio value over time (advanced)
+- `graphs/advanced_backtest/feature_importance.png`: Feature importance (Random Forest, SPY)
+- `graphs/advanced_backtest/shap_summary.png`: SHAP summary plot (explainable AI, SPY)
+- `graphs/advanced_backtest/spy_advanced_walkforward_portfolio.png`: SPY walk-forward portfolio value (advanced)
+- `graphs/backtest/backtest_performance.png`: SPY backtest performance metrics
+- `graphs/backtest/spy_walkforward_portfolio.png`: SPY walk-forward portfolio value (standard)
+- `graphs/crypto_backtest/crypto_walkforward_portfolio.png`: BTC/USD walk-forward portfolio value
 
 ---
 

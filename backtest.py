@@ -297,7 +297,8 @@ def plot_results(results):
     plt.grid(True)
     
     plt.tight_layout()
-    plt.savefig('backtest_performance.png', dpi=300, bbox_inches='tight')
+    os.makedirs('graphs/backtest', exist_ok=True)
+    plt.savefig('graphs/backtest/backtest_performance.png', dpi=300, bbox_inches='tight')
     plt.close()
 
 def walkforward_backtest(df, test_days=30):
