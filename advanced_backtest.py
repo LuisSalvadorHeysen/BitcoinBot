@@ -21,6 +21,8 @@ from sklearn.ensemble import RandomForestRegressor
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import yfinance as yf
+import shap
 
 # --- Simulation Settings ---
 DATA_FILE = 'project3/data/spy_usd.csv'
@@ -96,30 +98,46 @@ def prepare_ml_data(df):
     ml_df = ml_df.dropna()
     return ml_df
 
-def main():
-    """Main advanced backtesting function."""
-    print("StockBot: Starting advanced backtesting simulation...")
+def fetch_historical_data(symbol, days=365):
+    """
+    Fetch historical stock price data from Yahoo Finance API.
     
-    # Load data
-    try:
-        df = pd.read_csv(DATA_FILE, parse_dates=['timestamp'])
-        print(f"Loaded {len(df)} data points from {DATA_FILE}")
-    except FileNotFoundError:
-        print(f"Error: {DATA_FILE} not found. Please run main.py first to fetch data.")
-        return
+    Args:
+        symbol (str): Stock symbol (e.g., 'SPY')
+        days (int): Number of days of historical data to fetch
     
-    ml_df = prepare_ml_data(df)
-    print(f"Prepared {len(ml_df)} data points with {len(ml_df.columns)-2} features for ML training")
+    Returns:
+        pd.DataFrame: DataFrame with timestamp, open, high, low, close prices
+    """
+    # Get historical daily data
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period=f"{days}d", interval="1d")
+    
+    # Reset index to get timestamp as column
+    df = df.reset_index()
+    
+    # The index column is 'Date', rename it to 'timestamp'
+    if 'Date' in df.columns:
+        df = df.rename(columns={'Date': 'timestamp'})
+    
+    # Select only the OHLC columns we need and rename them
+    df = df[['timestamp', 'Open', 'High', 'Low', 'Close']].copy()
+    df.columns = ['timestamp', 'open', 'high', 'low', 'close']
+    
+    return df.reset_index(drop=True)
 
+def run_advanced_backtest(ml_df):
+    """Run advanced backtest with Random Forest model."""
     # Initialize portfolio
     cash = INITIAL_CASH
-    btc = 0.0
+    shares = 0.0
     portfolio_values = []
-    trade_log = []
-
+    trades = []
+    peak_portfolio = INITIAL_CASH
+    entry_price = 0
+    current_position = 0
+    
     print(f"Starting advanced backtest with ${INITIAL_CASH:,.0f} initial capital...")
-    print("Using Random Forest model with 18+ technical indicators")
-    print(f"Lower threshold ({HOLD_THRESHOLD*100:.3f}%) for more trades")
     
     for i in range(WINDOW, len(ml_df) - 1):
         train = ml_df.iloc[i-WINDOW:i]
@@ -133,109 +151,229 @@ def main():
         
         current_price = test['close'].values[0]
         current_time = test['timestamp'].values[0]
-
-        # Train Random Forest model with better parameters
+        
+        # Train Random Forest model
         model = RandomForestRegressor(n_estimators=100, random_state=42, max_depth=8, min_samples_split=5)
         model.fit(X_train, y_train)
         
         pred = model.predict(X_test)[0]
         pct_move = (pred - current_price) / current_price
-
-        # Trading logic with position sizing
+        
+        # Calculate portfolio value
+        portfolio_value = cash + shares * current_price
+        portfolio_values.append(portfolio_value)
+        
+        if portfolio_value > peak_portfolio:
+            peak_portfolio = portfolio_value
+        
+        # Trading logic
         trade_action = 'HOLD'
         trade_amount = 0
         
-        if pct_move > HOLD_THRESHOLD and cash > 0:
+        if pct_move > HOLD_THRESHOLD and cash > 0 and current_position == 0:
             # Buy with position sizing
             trade_amount = cash * POSITION_SIZE
-            buy_price = current_price * (1 + SLIPPAGE_RATE * np.random.rand())
-            btc_to_buy = trade_amount / buy_price
-            fee = btc_to_buy * FEE_RATE
-            btc_to_buy -= fee
+            buy_price = current_price * (1 + SLIPPAGE_RATE)
+            shares_to_buy = trade_amount / buy_price
+            fee = shares_to_buy * buy_price * FEE_RATE
+            shares_to_buy -= fee / buy_price
             
-            btc += btc_to_buy
+            shares += shares_to_buy
             cash -= trade_amount
+            current_position = 1
+            entry_price = buy_price
             trade_action = 'BUY'
-            trade_log.append((current_time, 'BUY', buy_price, btc_to_buy, fee * buy_price))
-
-        elif pct_move < -HOLD_THRESHOLD and btc > 0:
-            # Sell with position sizing
-            btc_to_sell = btc * POSITION_SIZE
-            sell_price = current_price * (1 - SLIPPAGE_RATE * np.random.rand())
-            fee = btc_to_sell * sell_price * FEE_RATE
-            
-            cash += btc_to_sell * sell_price - fee
-            btc -= btc_to_sell
-            trade_action = 'SELL'
-            trade_log.append((current_time, 'SELL', sell_price, btc_to_sell, fee))
-
-        # Print every 20th step to avoid spam
-        if i % 20 == 0:
-            portfolio_value = cash + btc * current_price
-            print(f"{current_time} - Price: ${current_price:,.2f}, Predicted Move: {pct_move:+.4f}%, Action: {trade_action}, Portfolio: ${portfolio_value:,.0f}")
-
-        portfolio_value = cash + btc * current_price
-        portfolio_values.append(portfolio_value)
-
-    print("Advanced backtest finished.")
-
-    # Performance Analysis
-    returns_df = pd.DataFrame(portfolio_values, columns=['value'])
-    returns_df['daily_return'] = returns_df['value'].pct_change()
-
-    std_return = returns_df['daily_return'].std()
-    if std_return and not np.isnan(std_return):
-        sharpe_ratio = (returns_df['daily_return'].mean() / std_return) * np.sqrt(252)
-        sharpe_str = f"{sharpe_ratio:.2f}"
-    else:
-        sharpe_str = "N/A (insufficient return variance)"
-
-    peak = returns_df['value'].expanding(min_periods=1).max()
-    drawdown = (returns_df['value'] - peak) / peak
-    max_drawdown = drawdown.min()
-
-    print("\n--- Advanced Performance Metrics ---")
-    print(f"Final Portfolio Value: ${portfolio_values[-1]:,.2f}")
-    print(f"Total Return: {(portfolio_values[-1] - INITIAL_CASH) / INITIAL_CASH * 100:.2f}%")
-    print(f"Annualized Sharpe Ratio: {sharpe_str}")
-    print(f"Maximum Drawdown: {max_drawdown*100:.2f}%")
-    print(f"Total Trades: {len(trade_log)}")
-    
-    if trade_log:
-        log_df = pd.DataFrame(trade_log, columns=['Timestamp', 'Action', 'Price', 'Quantity', 'Fee (USD)'])
-        log_df.to_csv('advanced_trade_log.csv', index=False)
-        print("\nAdvanced trade log saved to advanced_trade_log.csv")
+            trades.append({
+                'timestamp': current_time,
+                'action': 'BUY',
+                'price': buy_price,
+                'quantity': shares_to_buy,
+                'fee': fee,
+                'portfolio_value': portfolio_value
+            })
         
-        # Show some trade statistics
-        buy_trades = log_df[log_df['Action'] == 'BUY']
-        sell_trades = log_df[log_df['Action'] == 'SELL']
-        print(f"Buy trades: {len(buy_trades)}, Sell trades: {len(sell_trades)}")
+        elif pct_move < -HOLD_THRESHOLD and shares > 0:
+            # Sell with position sizing
+            sell_price = current_price * (1 - SLIPPAGE_RATE)
+            fee = shares * sell_price * FEE_RATE
+            
+            cash += shares * sell_price - fee
+            shares = 0
+            current_position = 0
+            trade_action = 'SELL'
+            trades.append({
+                'timestamp': current_time,
+                'action': 'SELL',
+                'price': sell_price,
+                'quantity': shares,
+                'fee': fee,
+                'portfolio_value': portfolio_value
+            })
+    
+    # Calculate final portfolio value
+    final_value = cash + shares * current_price
+    
+    # Calculate metrics
+    total_return = (final_value - INITIAL_CASH) / INITIAL_CASH * 100
+    annualized_return = total_return * (252 / len(ml_df))
+    
+    # Sharpe ratio
+    returns = pd.Series(portfolio_values).pct_change().dropna()
+    sharpe_ratio = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
+    
+    # Maximum drawdown
+    peak = pd.Series(portfolio_values).expanding(min_periods=1).max()
+    drawdown = (pd.Series(portfolio_values) - peak) / peak
+    max_drawdown = drawdown.min() * 100
+    
+    # Trade statistics
+    total_trades = len(trades)
+    if total_trades > 0:
+        buy_trades = [t for t in trades if t['action'] == 'BUY']
+        sell_trades = [t for t in trades if t['action'] == 'SELL']
+        win_rate = len([t for t in sell_trades if t['price'] > entry_price]) / len(sell_trades) * 100 if sell_trades else 0
+        avg_trade_return = sum([(t['price'] - entry_price) / entry_price for t in sell_trades]) / len(sell_trades) * 100 if sell_trades else 0
     else:
-        print("\nNo trades were executed.")
+        win_rate = 0
+        avg_trade_return = 0
+    
+    return {
+        'final_value': final_value,
+        'total_return': total_return,
+        'annualized_return': annualized_return,
+        'sharpe_ratio': sharpe_ratio,
+        'max_drawdown': max_drawdown,
+        'total_trades': total_trades,
+        'win_rate': win_rate,
+        'avg_trade_return': avg_trade_return,
+        'trades': trades,
+        'portfolio_values': portfolio_values
+    }
 
-    # Plotting
-    timestamps = df['timestamp'].iloc[WINDOW+1:WINDOW+1+len(portfolio_values)].values
-    df_plot = pd.DataFrame({'timestamp': timestamps, 'portfolio_value': portfolio_values})
-    df_plot.set_index('timestamp')['portfolio_value'].plot(title='Portfolio Value Over Time (Advanced Model)')
-    plt.ylabel('USD')
-    plt.savefig('portfolio_value_advanced.png')
-    print('Advanced portfolio value plot saved as portfolio_value_advanced.png')
-    plt.clf()
-
-    # Feature importance plot
+def generate_shap_analysis(ml_df):
+    """Generate SHAP analysis for model interpretability."""
+    # Prepare data for SHAP
+    feature_cols = [col for col in ml_df.columns if col not in ['timestamp', 'next_output']]
+    X = ml_df[feature_cols].iloc[-100:]  # Use last 100 samples for SHAP
+    y = ml_df['next_output'].iloc[-100:]
+    
+    # Train model on recent data
+    model = RandomForestRegressor(n_estimators=100, random_state=42, max_depth=8)
+    model.fit(X, y)
+    
+    # Generate SHAP values
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X)
+    
+    # Plot SHAP summary
+    plt.figure(figsize=(10, 8))
+    shap.summary_plot(shap_values, X, plot_type="bar", show=False)
+    plt.title('SHAP Feature Importance Summary')
+    plt.tight_layout()
+    plt.savefig('shap_summary.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Plot feature importance
     feature_importance = pd.DataFrame({
         'feature': feature_cols,
         'importance': model.feature_importances_
     }).sort_values('importance', ascending=False)
-
+    
     plt.figure(figsize=(10, 6))
     plt.barh(feature_importance['feature'], feature_importance['importance'])
     plt.title('Feature Importance (Random Forest)')
     plt.xlabel('Importance')
     plt.tight_layout()
     plt.savefig('feature_importance.png')
-    print('Feature importance plot saved as feature_importance.png')
     plt.close()
+
+def plot_advanced_results(results):
+    """Plot advanced backtest results."""
+    plt.figure(figsize=(12, 8))
+    
+    # Portfolio value over time
+    plt.subplot(2, 1, 1)
+    plt.plot(results['portfolio_values'])
+    plt.title('Portfolio Value Over Time (Advanced Model)')
+    plt.ylabel('USD')
+    plt.grid(True)
+    
+    # Trade points
+    if results['trades']:
+        buy_times = [i for i, t in enumerate(results['trades']) if t['action'] == 'BUY']
+        sell_times = [i for i, t in enumerate(results['trades']) if t['action'] == 'SELL']
+        
+        if buy_times:
+            plt.scatter(buy_times, [results['portfolio_values'][i] for i in buy_times], 
+                       color='green', marker='^', s=50, label='Buy')
+        if sell_times:
+            plt.scatter(sell_times, [results['portfolio_values'][i] for i in sell_times], 
+                       color='red', marker='v', s=50, label='Sell')
+        plt.legend()
+    
+    # Performance metrics
+    plt.subplot(2, 1, 2)
+    metrics = ['Total Return', 'Sharpe Ratio', 'Max Drawdown']
+    values = [results['total_return'], results['sharpe_ratio'], results['max_drawdown']]
+    colors = ['green' if v > 0 else 'red' for v in values]
+    
+    plt.bar(metrics, values, color=colors)
+    plt.title('Advanced Performance Metrics')
+    plt.ylabel('Value')
+    plt.grid(True)
+    
+    plt.tight_layout()
+    plt.savefig('portfolio_value_advanced.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def main():
+    """Main advanced backtesting function."""
+    print("StockBot: Advanced Backtesting with SHAP Analysis")
+    print("=" * 50)
+    
+    # Fetch historical data
+    print("Fetching historical SPY data...")
+    data = fetch_historical_data('SPY', days=365)
+    print(f"Fetched {len(data)} days of data")
+    
+    if len(data) < 100:
+        print("Not enough historical data for backtesting")
+        return
+    
+    # Prepare ML data
+    ml_df = prepare_ml_data(data)
+    print(f"Prepared {len(ml_df)} data points with advanced indicators")
+    
+    # Run backtest
+    print("Running advanced backtest...")
+    results = run_advanced_backtest(ml_df)
+    
+    # Display results
+    print("\n" + "=" * 50)
+    print("ADVANCED BACKTEST RESULTS")
+    print("=" * 50)
+    print(f"Initial Portfolio Value: ${INITIAL_CASH:,.2f}")
+    print(f"Final Portfolio Value: ${results['final_value']:,.2f}")
+    print(f"Total Return: {results['total_return']:.2f}%")
+    print(f"Annualized Return: {results['annualized_return']:.2f}%")
+    print(f"Sharpe Ratio: {results['sharpe_ratio']:.2f}")
+    print(f"Maximum Drawdown: {results['max_drawdown']:.2f}%")
+    print(f"Total Trades: {results['total_trades']}")
+    print(f"Win Rate: {results['win_rate']:.1f}%")
+    print(f"Average Trade Return: {results['avg_trade_return']:.2f}%")
+    
+    # Save results
+    results_df = pd.DataFrame(results['trades'])
+    results_df.to_csv('advanced_trade_log.csv', index=False)
+    print(f"\nDetailed results saved to advanced_trade_log.csv")
+    
+    # Generate SHAP analysis
+    print("Generating SHAP analysis...")
+    generate_shap_analysis(ml_df)
+    
+    # Plot results
+    plot_advanced_results(results)
+    print("Performance plot saved as portfolio_value_advanced.png")
 
 if __name__ == '__main__':
     main() 

@@ -17,10 +17,38 @@ from sklearn.linear_model import LinearRegression
 # Settings
 SYMBOL = 'SPY'  # S&P 500 ETF - generally trends upward
 DATA_DIR = 'project3/data'
-HISTORY_MINUTES = 100
+HISTORY_MINUTES = 1000
 
 # Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)
+
+def fetch_historical_data(symbol, days=365):
+    """
+    Fetch historical stock price data from Yahoo Finance API.
+    
+    Args:
+        symbol (str): Stock symbol (e.g., 'SPY')
+        days (int): Number of days of historical data to fetch
+    
+    Returns:
+        pd.DataFrame: DataFrame with timestamp, open, high, low, close prices
+    """
+    # Get historical daily data
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period=f"{days}d", interval="1d")
+    
+    # Reset index to get timestamp as column
+    df = df.reset_index()
+    
+    # The index column is 'Date', rename it to 'timestamp'
+    if 'Date' in df.columns:
+        df = df.rename(columns={'Date': 'timestamp'})
+    
+    # Select only the OHLC columns we need and rename them
+    df = df[['timestamp', 'Open', 'High', 'Low', 'Close']].copy()
+    df.columns = ['timestamp', 'open', 'high', 'low', 'close']
+    
+    return df.reset_index(drop=True)
 
 def fetch_stock_data(symbol, minutes=None):
     """
@@ -67,52 +95,69 @@ def prepare_ml_data(df):
     ml_df = ml_df.dropna()
     return ml_df
 
+def train_model(df):
+    """Train a Linear Regression model on the given DataFrame."""
+    ml_df = prepare_ml_data(df)
+    X_train = ml_df[['close', 'high', 'low', 'open']]
+    y_train = ml_df['next_output']
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    return model
+
+def predict_price(model, df):
+    """Predict the next price using the trained model."""
+    ml_df = prepare_ml_data(df)
+    X_pred = ml_df.iloc[-1][['close', 'high', 'low', 'open']].values.reshape(1, -1)
+    return model.predict(X_pred)[0]
+
 def main():
-    """
-    Main function that continuously fetches data, trains model, and makes predictions.
-    Runs in an infinite loop with 60-second intervals.
-    """
-    print("StockBot: Starting data fetching and prediction...")
-    print(f"Fetching {SYMBOL} price data every 60 seconds")
+    """Main function to run the trading bot."""
+    print("StockBot: Educational Algorithmic Trading Bot")
+    print("=" * 50)
+    
+    # Fetch historical data for training
+    print("Fetching historical data for model training...")
+    historical_data = fetch_historical_data('SPY', days=365)
+    print(f"Fetched {len(historical_data)} days of historical data")
+    
+    # Save historical data
+    historical_data.to_csv(os.path.join(DATA_DIR, 'spy_historical.csv'), index=False)
+    print(f"Saved historical data to {os.path.join(DATA_DIR, 'spy_historical.csv')}")
+    
+    # Train model on historical data
+    print("Training model on historical data...")
+    model = train_model(historical_data)
+    print("Model training completed!")
+    
+    print("\nStarting live prediction loop...")
     print("Press Ctrl+C to stop")
     
-    while True:
-        try:
-            # Fetch and save data
-            stock_data = fetch_stock_data(SYMBOL, HISTORY_MINUTES)
-            save_data(stock_data, SYMBOL)
-
-            # Prepare ML data
-            ml_df = prepare_ml_data(stock_data)
-            if len(ml_df) < 10:
-                print("Not enough data to train model.")
-                time.sleep(60)
-                continue
-            train_data = ml_df.iloc[:-1]
-            test_data = ml_df.iloc[-1:]
-            X_train = train_data[['close', 'high', 'low', 'open']]
-            y_train = train_data['next_output']
-
-            # Train model
-            model = LinearRegression()
-            model.fit(X_train, y_train)
-
-            # Predict next price (for demonstration)
-            latest_row = test_data.iloc[0]
-            X_pred = latest_row[['close', 'high', 'low', 'open']].values.reshape(1, -1)
-            predicted_next = model.predict(X_pred)[0]
-            current_price = latest_row['close']
-            pct_change = ((predicted_next - current_price) / current_price) * 100
+    try:
+        while True:
+            # Fetch current data
+            current_data = fetch_stock_data('SPY', minutes=60)
             
-            print(f"Current price: ${current_price:,.2f}, Predicted next: ${predicted_next:,.2f} ({pct_change:+.2f}%)")
-
-            time.sleep(60)
-        except KeyboardInterrupt:
-            print("\nStockBot stopped by user.")
-            break
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            time.sleep(60)
+            if current_data is not None and len(current_data) > 0:
+                # Save current data
+                current_data.to_csv(os.path.join(DATA_DIR, 'spy_usd.csv'), index=False)
+                
+                # Make prediction
+                current_price = current_data['close'].iloc[-1]
+                prediction = predict_price(model, current_data)
+                
+                if prediction is not None:
+                    change_pct = ((prediction - current_price) / current_price) * 100
+                    print(f"Current price: ${current_price:.2f}, Predicted next: ${prediction:.2f} ({change_pct:+.2f}%)")
+                else:
+                    print(f"Current price: ${current_price:.2f}, Prediction failed")
+            else:
+                print("Failed to fetch current data")
+            
+            time.sleep(60)  # Wait 1 minute before next prediction
+            
+    except KeyboardInterrupt:
+        print("\nStopping StockBot...")
+        print("Thank you for using StockBot!")
 
 if __name__ == '__main__':
     main() 

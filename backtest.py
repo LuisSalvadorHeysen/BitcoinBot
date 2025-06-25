@@ -22,6 +22,7 @@ import shap
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import yfinance as yf
 
 # --- Simulation Settings ---
 DATA_FILE = 'project3/data/spy_usd.csv'
@@ -98,33 +99,49 @@ def calculate_position_size(volatility, confidence, cash):
     
     return min(position_size, 0.9)  # Cap at 90%
 
-def main():
-    """Main backtesting function with advanced strategy."""
-    print("StockBot: Starting PROFITABLE backtesting simulation...")
+def fetch_historical_data(symbol, days=365):
+    """
+    Fetch historical stock price data from Yahoo Finance API.
     
-    # Load data
-    try:
-        df = pd.read_csv(DATA_FILE, parse_dates=['timestamp'])
-        print(f"Loaded {len(df)} data points from {DATA_FILE}")
-    except FileNotFoundError:
-        print(f"Error: {DATA_FILE} not found. Please run main.py first to fetch data.")
-        return
+    Args:
+        symbol (str): Stock symbol (e.g., 'SPY')
+        days (int): Number of days of historical data to fetch
     
-    ml_df = prepare_ml_data(df)
-    print(f"Prepared {len(ml_df)} data points with advanced indicators")
+    Returns:
+        pd.DataFrame: DataFrame with timestamp, open, high, low, close prices
+    """
+    # Get historical daily data
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period=f"{days}d", interval="1d")
+    
+    # Reset index to get timestamp as column
+    df = df.reset_index()
+    
+    # The index column is 'Date', rename it to 'timestamp'
+    if 'Date' in df.columns:
+        df = df.rename(columns={'Date': 'timestamp'})
+    
+    # Select only the OHLC columns we need and rename them
+    df = df[['timestamp', 'Open', 'High', 'Low', 'Close']].copy()
+    df.columns = ['timestamp', 'open', 'high', 'low', 'close']
+    
+    return df.reset_index(drop=True)
 
-    # --- Portfolio & Logging Initialization ---
+def run_backtest(data):
+    """Run backtest on historical data."""
+    # Prepare ML data
+    ml_df = prepare_ml_data(data)
+    
+    # Initialize portfolio
     cash = INITIAL_CASH
-    btc = 0.0
+    shares = 0.0
     portfolio_values = []
-    trade_log = []
+    trades = []
     peak_portfolio = INITIAL_CASH
     entry_price = 0
-    current_position = 0  # 0 = no position, 1 = long, -1 = short
-    last_grid_price = None  # Track last grid price for grid trading
-
+    current_position = 0
+    
     print(f"Starting backtest with ${INITIAL_CASH:,.0f} initial capital...")
-    print("Using WINNING strategy")
     
     for i in range(WINDOW, len(ml_df) - 1):
         train = ml_df.iloc[i-WINDOW:i]
@@ -138,168 +155,186 @@ def main():
         
         current_price = test['close'].values[0]
         current_time = test['timestamp'].values[0]
-        current_volatility = test['volatility_ratio'].values[0]
-        current_rsi = test['rsi'].values[0]
-        current_bb_position = test['bb_position'].values[0]
-
+        
         # Train model
         model = RandomForestRegressor(n_estimators=100, random_state=42, max_depth=6)
         model.fit(X_train, y_train)
         pred = model.predict(X_test)[0]
         pct_move = (pred - current_price) / current_price
-
-        # Calculate portfolio value and drawdown
-        portfolio_value = cash + btc * current_price
+        
+        # Calculate portfolio value
+        portfolio_value = cash + shares * current_price
         portfolio_values.append(portfolio_value)
         
         if portfolio_value > peak_portfolio:
             peak_portfolio = portfolio_value
         
-        current_drawdown = (peak_portfolio - portfolio_value) / peak_portfolio
-        
-        # Stop trading if max drawdown exceeded
-        if current_drawdown > MAX_DRAWDOWN:
-            print(f"MAX DRAWDOWN EXCEEDED ({current_drawdown*100:.2f}%). Stopping trading.")
-            break
-
-        # --- WINNING STRATEGY ---
+        # Trading logic
         trade_action = 'HOLD'
         trade_amount = 0
         
-        # Winning strategy: Combine trend following with mean reversion
-        # Use multiple timeframes for better signals
-        
-        # Short-term trend (3 periods)
-        sma_3 = train['close'].tail(3).mean()
-        # Medium-term trend (10 periods) 
-        sma_10 = train['close'].tail(10).mean()
-        
-        price_vs_sma3 = (current_price - sma_3) / sma_3
-        price_vs_sma10 = (current_price - sma_10) / sma_10
-        
-        # Trend direction
-        trend_up = sma_3 > sma_10
-        trend_down = sma_3 < sma_10
-        
-        # Buy conditions: 
-        # 1. Price below short-term average (dip)
-        # 2. AND either trend is up OR RSI is oversold
-        buy_condition = (price_vs_sma3 < -0.0002 and cash > 0 and 
-                        (trend_up or current_rsi < 30))
-        
-        # Sell conditions:
-        # 1. Price above short-term average (bounce) OR
-        # 2. Trend is down OR RSI is overbought OR
-        # 3. We have profit
-        sell_condition = False
-        if btc > 0 and current_position == 1:
-            unrealized_pnl = (current_price - entry_price) / entry_price
-            sell_condition = (price_vs_sma3 > 0.0002 or trend_down or 
-                            current_rsi > 70 or unrealized_pnl > 0.0008)  # 0.08% profit
-        
-        # Execute trades
-        if buy_condition:
-            position_size = 0.4  # Use 40% of cash
+        # Buy if predicted price is significantly higher
+        if pct_move > MIN_SIGNAL_STRENGTH and cash > 0 and current_position == 0:
+            position_size = calculate_position_size(0.1, pct_move, cash)
             trade_amount = cash * position_size
             
-            buy_price = current_price * (1 + SLIPPAGE_RATE * np.random.rand())
-            btc_to_buy = trade_amount / buy_price
-            fee = btc_to_buy * FEE_RATE
-            btc_to_buy -= fee
+            buy_price = current_price * (1 + SLIPPAGE_RATE)
+            shares_to_buy = trade_amount / buy_price
+            fee = shares_to_buy * buy_price * FEE_RATE
+            shares_to_buy -= fee / buy_price
             
-            btc += btc_to_buy
+            shares += shares_to_buy
             cash -= trade_amount
             current_position = 1
             entry_price = buy_price
-            trend_str = "UP" if trend_up else "DOWN"
-            trade_action = f'BUY (Dip: {price_vs_sma3:.4f}, Trend: {trend_str}, RSI: {current_rsi:.1f})'
-            trade_log.append((current_time, trade_action, buy_price, btc_to_buy, fee * buy_price))
-
-        elif sell_condition:
-            sell_price = current_price * (1 - SLIPPAGE_RATE * np.random.rand())
-            fee = btc * sell_price * FEE_RATE
+            trade_action = f'BUY ({pct_move:.4f})'
+            trades.append({
+                'timestamp': current_time,
+                'action': 'BUY',
+                'price': buy_price,
+                'quantity': shares_to_buy,
+                'fee': fee,
+                'portfolio_value': portfolio_value
+            })
+        
+        # Sell if predicted price is significantly lower or we have profit
+        elif (pct_move < -MIN_SIGNAL_STRENGTH or 
+              (current_position == 1 and (current_price - entry_price) / entry_price > 0.01)) and shares > 0:
+            sell_price = current_price * (1 - SLIPPAGE_RATE)
+            fee = shares * sell_price * FEE_RATE
             
-            cash += btc * sell_price - fee
-            btc = 0
+            cash += shares * sell_price - fee
+            shares = 0
             current_position = 0
-            unrealized_pnl = (current_price - entry_price) / entry_price
-            trend_str = "UP" if trend_up else "DOWN"
-            trade_action = f'SELL (Bounce: {price_vs_sma3:.4f}, Trend: {trend_str}, RSI: {current_rsi:.1f}, PnL: {unrealized_pnl:.4f})'
-            trade_log.append((current_time, trade_action, sell_price, btc, fee))
-        
-        # Stop loss protection
-        elif current_position == 1 and btc > 0:
-            unrealized_pnl = (current_price - entry_price) / entry_price
-            
-            if unrealized_pnl <= -STOP_LOSS:  # Stop loss
-                sell_price = current_price * (1 - SLIPPAGE_RATE * np.random.rand())
-                fee = btc * sell_price * FEE_RATE
-                cash += btc * sell_price - fee
-                btc = 0
-                current_position = 0
-                trade_action = 'STOP LOSS'
-                trade_log.append((current_time, trade_action, sell_price, btc, fee))
-
-        # Print every 3rd step for more frequent updates
-        if i % 3 == 0:
-            trend_str = "UP" if trend_up else "DOWN"
-            print(f"{current_time} - Price: ${current_price:,.2f}, vs SMA3: {price_vs_sma3:.4f}, Trend: {trend_str}, RSI: {current_rsi:.1f}, Action: {trade_action}, Portfolio: ${portfolio_value:,.0f}")
-
-    print("Backtest finished.")
-
-    # --- Performance Analysis ---
-    returns_df = pd.DataFrame(portfolio_values, columns=['value'])
-    returns_df['daily_return'] = returns_df['value'].pct_change()
-
-    std_return = returns_df['daily_return'].std()
-    if std_return and not np.isnan(std_return):
-        sharpe_ratio = (returns_df['daily_return'].mean() / std_return) * np.sqrt(252)
-        sharpe_str = f"{sharpe_ratio:.2f}"
-    else:
-        sharpe_str = "N/A (insufficient return variance)"
-
-    peak = returns_df['value'].expanding(min_periods=1).max()
-    drawdown = (returns_df['value'] - peak) / peak
-    max_drawdown = drawdown.min()
-
-    print("\n--- PROFITABLE Performance Metrics ---")
-    print(f"Final Portfolio Value: ${portfolio_values[-1]:,.2f}")
-    print(f"Total Return: {(portfolio_values[-1] - INITIAL_CASH) / INITIAL_CASH * 100:.2f}%")
-    print(f"Annualized Sharpe Ratio: {sharpe_str}")
-    print(f"Maximum Drawdown: {max_drawdown*100:.2f}%")
-    print(f"Total Trades: {len(trade_log)}")
+            trade_action = f'SELL ({pct_move:.4f})'
+            trades.append({
+                'timestamp': current_time,
+                'action': 'SELL',
+                'price': sell_price,
+                'quantity': shares,
+                'fee': fee,
+                'portfolio_value': portfolio_value
+            })
     
-    if trade_log:
-        log_df = pd.DataFrame(trade_log, columns=['Timestamp', 'Action', 'Price', 'Quantity', 'Fee (USD)'])
-        log_df.to_csv('trade_log.csv', index=False)
-        print("\nTrade log saved to trade_log.csv")
-        
-        # Show detailed trade statistics
-        buy_trades = log_df[log_df['Action'].str.contains('BUY')]
-        sell_trades = log_df[log_df['Action'].str.contains('SELL')]
-        stop_losses = log_df[log_df['Action'].str.contains('STOP LOSS')]
-        take_profits = log_df[log_df['Action'].str.contains('TAKE PROFIT')]
-        
-        print(f"Buy trades: {len(buy_trades)}, Sell trades: {len(sell_trades)}")
-        print(f"Stop losses: {len(stop_losses)}, Take profits: {len(take_profits)}")
-        
-        # Calculate win rate
-        if len(sell_trades) > 0:
-            profitable_trades = len(take_profits)
-            total_exits = len(sell_trades) + len(stop_losses) + len(take_profits)
-            win_rate = profitable_trades / total_exits * 100
-            print(f"Win rate: {win_rate:.1f}%")
+    # Calculate final portfolio value
+    final_value = cash + shares * current_price
+    
+    # Calculate metrics
+    total_return = (final_value - INITIAL_CASH) / INITIAL_CASH * 100
+    annualized_return = total_return * (252 / len(data))
+    
+    # Sharpe ratio
+    returns = pd.Series(portfolio_values).pct_change().dropna()
+    sharpe_ratio = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
+    
+    # Maximum drawdown
+    peak = pd.Series(portfolio_values).expanding(min_periods=1).max()
+    drawdown = (pd.Series(portfolio_values) - peak) / peak
+    max_drawdown = drawdown.min() * 100
+    
+    # Trade statistics
+    total_trades = len(trades)
+    if total_trades > 0:
+        buy_trades = [t for t in trades if t['action'] == 'BUY']
+        sell_trades = [t for t in trades if t['action'] == 'SELL']
+        win_rate = len([t for t in sell_trades if t['price'] > entry_price]) / len(sell_trades) * 100 if sell_trades else 0
+        avg_trade_return = sum([(t['price'] - entry_price) / entry_price for t in sell_trades]) / len(sell_trades) * 100 if sell_trades else 0
     else:
-        print("\nNo trades were executed.")
+        win_rate = 0
+        avg_trade_return = 0
+    
+    return {
+        'final_value': final_value,
+        'total_return': total_return,
+        'annualized_return': annualized_return,
+        'sharpe_ratio': sharpe_ratio,
+        'max_drawdown': max_drawdown,
+        'total_trades': total_trades,
+        'win_rate': win_rate,
+        'avg_trade_return': avg_trade_return,
+        'trades': trades,
+        'portfolio_values': portfolio_values
+    }
 
-    # --- Plotting ---
-    timestamps = df['timestamp'].iloc[WINDOW+1:WINDOW+1+len(portfolio_values)].values
-    df_plot = pd.DataFrame({'timestamp': timestamps, 'portfolio_value': portfolio_values})
-    df_plot.set_index('timestamp')['portfolio_value'].plot(title='Portfolio Value Over Time (FINAL PROFITABLE Strategy)')
+def plot_results(results):
+    """Plot backtest results."""
+    plt.figure(figsize=(12, 8))
+    
+    # Portfolio value over time
+    plt.subplot(2, 1, 1)
+    plt.plot(results['portfolio_values'])
+    plt.title('Portfolio Value Over Time')
     plt.ylabel('USD')
-    plt.savefig('portfolio_value_profitable.png')
-    print('Portfolio value plot saved as portfolio_value_profitable.png')
-    plt.clf()
+    plt.grid(True)
+    
+    # Trade points
+    if results['trades']:
+        buy_times = [i for i, t in enumerate(results['trades']) if t['action'] == 'BUY']
+        sell_times = [i for i, t in enumerate(results['trades']) if t['action'] == 'SELL']
+        
+        if buy_times:
+            plt.scatter(buy_times, [results['portfolio_values'][i] for i in buy_times], 
+                       color='green', marker='^', s=50, label='Buy')
+        if sell_times:
+            plt.scatter(sell_times, [results['portfolio_values'][i] for i in sell_times], 
+                       color='red', marker='v', s=50, label='Sell')
+        plt.legend()
+    
+    # Performance metrics
+    plt.subplot(2, 1, 2)
+    metrics = ['Total Return', 'Sharpe Ratio', 'Max Drawdown']
+    values = [results['total_return'], results['sharpe_ratio'], results['max_drawdown']]
+    colors = ['green' if v > 0 else 'red' for v in values]
+    
+    plt.bar(metrics, values, color=colors)
+    plt.title('Performance Metrics')
+    plt.ylabel('Value')
+    plt.grid(True)
+    
+    plt.tight_layout()
+    plt.savefig('backtest_performance.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def main():
+    """Main backtesting function with advanced strategy."""
+    print("StockBot Backtesting with Historical Data")
+    print("=" * 50)
+    
+    # Fetch historical data
+    print("Fetching historical SPY data...")
+    data = fetch_historical_data('SPY', days=365)
+    print(f"Fetched {len(data)} days of data")
+    
+    if len(data) < 100:
+        print("Not enough historical data for backtesting")
+        return
+    
+    # Run backtest
+    print("Running backtest...")
+    results = run_backtest(data)
+    
+    # Display results
+    print("\n" + "=" * 50)
+    print("BACKTEST RESULTS")
+    print("=" * 50)
+    print(f"Initial Portfolio Value: ${INITIAL_CASH:,.2f}")
+    print(f"Final Portfolio Value: ${results['final_value']:,.2f}")
+    print(f"Total Return: {results['total_return']:.2f}%")
+    print(f"Annualized Return: {results['annualized_return']:.2f}%")
+    print(f"Sharpe Ratio: {results['sharpe_ratio']:.2f}")
+    print(f"Maximum Drawdown: {results['max_drawdown']:.2f}%")
+    print(f"Total Trades: {results['total_trades']}")
+    print(f"Win Rate: {results['win_rate']:.1f}%")
+    print(f"Average Trade Return: {results['avg_trade_return']:.2f}%")
+    
+    # Save results
+    results_df = pd.DataFrame(results['trades'])
+    results_df.to_csv('backtest_results.csv', index=False)
+    print(f"\nDetailed results saved to backtest_results.csv")
+    
+    # Plot results
+    plot_results(results)
+    print("Performance plot saved as backtest_performance.png")
 
 if __name__ == '__main__':
     main() 

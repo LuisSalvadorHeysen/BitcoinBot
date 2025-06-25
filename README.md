@@ -4,35 +4,44 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Educational-orange.svg)]()
 
-A comprehensive, educational algorithmic trading bot for SPY (S&P 500 ETF) that demonstrates machine learning, backtesting, and explainable AI (XAI) in stock trading.
+A comprehensive, educational algorithmic trading bot for SPY (S&P 500 ETF) that demonstrates machine learning, backtesting, and explainable AI (XAI) in stock trading. This project is designed for students, educators, and anyone interested in learning about algorithmic trading and data science in finance.
+
+---
 
 ## 🎯 Overview
 
-This project showcases the development of a realistic stock trading bot using:
+This project walks you through building a realistic stock trading bot using:
 - **Machine Learning**: Random Forest and Linear Regression models
 - **Technical Analysis**: 18+ technical indicators (RSI, MACD, Bollinger Bands, etc.)
+- **Historical Data**: Model training and backtesting on years of SPY data
 - **Realistic Backtesting**: Transaction fees, slippage, and portfolio management
 - **Explainable AI**: SHAP analysis for model interpretability
 - **Performance Analytics**: Sharpe ratio, drawdown, and trade logging
 
+---
+
+## 🧑‍💻 How It Works
+
+1. **Fetch Historical Data**: Download years of SPY price data from Yahoo Finance.
+2. **Feature Engineering**: Calculate technical indicators and price-based features.
+3. **Model Training**: Train a machine learning model (Random Forest or Linear Regression) on historical data.
+4. **Backtesting**: Simulate trades using the trained model, including fees and slippage.
+5. **Performance Analysis**: Visualize results, compute Sharpe ratio, drawdown, and analyze feature importance with SHAP.
+6. **Live Prediction (Optional)**: Use the trained model to make live predictions on the latest SPY data.
+
+---
+
 ## ✨ Features
 
-### 🤖 Machine Learning
-- **Multiple Models**: Linear Regression, Random Forest, and Gradient Boosting
-- **Feature Engineering**: 18+ technical indicators and price-based features
+- **Multiple ML Models**: Linear Regression, Random Forest, and more
+- **18+ Technical Indicators**: SMA, EMA, RSI, MACD, Bollinger Bands, etc.
 - **Rolling Window Training**: Simulates real-time model updates
-- **Prediction Confidence**: Model explains its trading decisions
+- **Realistic Simulation**: Includes transaction fees, slippage, and position sizing
+- **Performance Metrics**: Sharpe ratio, max drawdown, win rate, trade logs
+- **Explainable AI**: SHAP plots and feature importance
+- **Educational Code**: Modular, well-documented, and easy to follow
 
-### 📊 Data & Analysis
-- **Real-time Data**: Yahoo Finance API integration for live SPY prices
-- **Technical Indicators**: SMA, EMA, RSI, MACD, Bollinger Bands, and more
-- **Performance Metrics**: Sharpe ratio, maximum drawdown, total returns
-- **Trade Logging**: Detailed CSV logs of all transactions
-
-### 🎓 Educational Components
-- **Modular Code**: Clean, well-documented functions
-- **Visualizations**: Portfolio performance and feature importance plots
-- **Best Practices**: Realistic trading simulation with fees and slippage
+---
 
 ## 🚀 Quick Start
 
@@ -41,32 +50,38 @@ This project showcases the development of a realistic stock trading bot using:
 pip install -r requirements.txt
 ```
 
-### Basic Usage
+### Typical Workflow
 ```bash
-# Fetch latest SPY data and run live predictions
+# 1. Fetch and save historical SPY data (automatically done in main.py)
 python main.py
 
-# Run backtesting simulation
+# 2. Run backtesting simulation on historical data
 python backtest.py
 
-# Run advanced backtesting with technical indicators
+# 3. Run advanced backtesting with technical indicators and SHAP analysis
 python advanced_backtest.py
 ```
+
+---
 
 ## 📁 Project Structure
 
 ```
 BitcoinBot/
-├── main.py                      # Data fetching and live prediction
-├── backtest.py                  # Basic backtesting simulation
-├── advanced_backtest.py         # Advanced ML backtesting
+├── main.py                      # Fetches historical data, trains model, live prediction
+├── backtest.py                  # Backtesting simulation on historical data
+├── advanced_backtest.py         # Advanced ML backtesting + SHAP explainability
 ├── requirements.txt             # Python dependencies
 ├── project3/
-│   └── data/                   # Historical data storage
-│       └── spy_usd.csv         # SPY price data
-├── *.png                       # Generated plots and visualizations
-└── *.csv                       # Trade logs and performance data
+│   └── data/
+│       ├── spy_usd.csv          # Recent SPY data (live)
+│       ├── spy_historical.csv   # Historical SPY data (for training/backtest)
+├── *.png                        # Generated plots and visualizations
+├── *.csv                        # Trade logs and performance data
+├── LICENSE, CONTRIBUTING.md, .gitignore
 ```
+
+---
 
 ## 📈 Results & Performance
 
@@ -80,15 +95,16 @@ Maximum Drawdown: -1.23%
 Total Trades: 47
 ```
 
-### Key Features
-- **Realistic Trading**: Includes 0.1% transaction fees and 0.05% slippage
-- **Risk Management**: Configurable hold thresholds and position sizing
-- **Performance Tracking**: Real-time portfolio value and trade logging
-- **Model Explainability**: SHAP analysis shows which features drive decisions
+### Sample Visualizations
+- `portfolio_value_advanced.png`: Portfolio value over time
+- `feature_importance.png`: Feature importance (Random Forest)
+- `shap_summary.png`: SHAP summary plot (explainable AI)
+
+---
 
 ## 🛠️ Configuration
 
-### Trading Parameters
+### Trading Parameters (edit in the scripts)
 ```python
 FEE_RATE = 0.001        # 0.1% transaction fee
 SLIPPAGE_RATE = 0.0005  # 0.05% price slippage
@@ -103,6 +119,8 @@ FEATURE_COLUMNS = 18    # Number of technical indicators
 MODEL_TYPE = "RandomForest"  # ML algorithm choice
 ```
 
+---
+
 ## 📊 Technical Indicators
 
 The bot uses 18+ technical indicators:
@@ -112,6 +130,8 @@ The bot uses 18+ technical indicators:
 - **Price Action**: Price changes (1, 5, 10 periods)
 - **Volume**: Volume ratios (when available)
 
+---
+
 ## 🎓 Educational Value
 
 This project demonstrates:
@@ -120,14 +140,15 @@ This project demonstrates:
 - **Software Engineering**: Clean code, modular design, and documentation
 - **Machine Learning**: Model selection, hyperparameter tuning, and interpretability
 
-## 🔮 Future Enhancements
+---
 
-- [ ] **Live Trading**: Integration with stock brokers
-- [ ] **Advanced Models**: LSTM, Transformer models for time series
-- [ ] **Multi-Asset**: Support for other ETFs and stocks
-- [ ] **Web Dashboard**: Real-time monitoring and control interface
-- [ ] **Risk Management**: Stop-loss, take-profit, and position sizing
-- [ ] **Sentiment Analysis**: News and social media integration
+## 🧹 Clean Up & Troubleshooting
+- If you see errors about missing columns (e.g., 'timestamp'), ensure you are using the latest code and have run `main.py` at least once.
+- If you want to start fresh, you can delete old CSVs in `project3/data/`.
+- For Python version issues, use Python 3.8+.
+- For plotting errors, ensure you have a working matplotlib installation (no GUI needed).
+
+---
 
 ## 🤝 Contributing
 
@@ -136,6 +157,10 @@ This is an educational project. Feel free to:
 - Add new features or models
 - Improve documentation
 - Share your results and insights
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
+
+---
 
 ## 📄 License
 
