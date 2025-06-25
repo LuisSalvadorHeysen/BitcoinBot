@@ -23,6 +23,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import yfinance as yf
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
 
 # --- Simulation Settings ---
 DATA_FILE = 'project3/data/spy_usd.csv'
@@ -321,7 +324,7 @@ def walkforward_backtest(df, test_days=30):
     step_log = []
     for i in range(len(test_df) - 1):
         row = test_df.iloc[i]
-        X = row[features].values.reshape(1, -1)
+        X = pd.DataFrame([row[features].values], columns=features)
         pred = model.predict(X)[0]
         current_price = row['close']
         pred_move = (pred - current_price) / current_price

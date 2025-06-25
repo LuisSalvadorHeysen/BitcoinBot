@@ -23,6 +23,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import yfinance as yf
 import shap
+import warnings
 
 # --- Simulation Settings ---
 DATA_FILE = 'project3/data/spy_usd.csv'
@@ -35,6 +36,8 @@ FEE_RATE = 0.0005  # Lower fees for more frequent trading
 SLIPPAGE_RATE = 0.0002  # Lower slippage
 HOLD_THRESHOLD = 0.0001  # Lowered to 0.01% to allow more trades
 POSITION_SIZE = 0.5  # Use 50% of available cash per trade
+
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
 
 def calculate_technical_indicators(df):
     """Calculate technical indicators for feature engineering"""
@@ -352,7 +355,7 @@ def walkforward_backtest(df, test_days=30):
     step_log = []
     for i in range(len(test_df) - 1):
         row = test_df.iloc[i]
-        X = row[features].values.reshape(1, -1)
+        X = pd.DataFrame([row[features].values], columns=features)
         pred = model.predict(X)[0]
         current_price = row['close']
         pred_move = (pred - current_price) / current_price
