@@ -28,7 +28,7 @@ import yfinance as yf
 DATA_FILE = 'project3/data/spy_usd.csv'
 INITIAL_CASH = 500000  # USD
 WINDOW = 60  # Rolling window size for training
-TEST_DAYS = 7  # Out-of-sample test period (last 7 days)
+TEST_DAYS = 30  # Out-of-sample test period (last 30 days)
 
 # --- Risk Management Settings ---
 FEE_RATE = 0.0005  # Lower fees for more frequent trading
@@ -296,14 +296,15 @@ def plot_results(results):
     plt.savefig('backtest_performance.png', dpi=300, bbox_inches='tight')
     plt.close()
 
-def walkforward_backtest(df, test_days=7):
+def walkforward_backtest(df, test_days=30):
     # Split into train and test
     last_day = df['timestamp'].dt.date.iloc[-1]
     test_start = last_day - pd.Timedelta(days=test_days-1)
     train_df = df[df['timestamp'].dt.date < test_start]
     test_df = df[df['timestamp'].dt.date >= test_start].reset_index(drop=True)
-    print(f"Train period: {train_df['timestamp'].iloc[0].date()} to {train_df['timestamp'].iloc[-1].date()}")
-    print(f"Test period: {test_df['timestamp'].iloc[0].date()} to {test_df['timestamp'].iloc[-1].date()}")
+    print(f"\nWALK-FORWARD OUT-OF-SAMPLE BACKTEST")
+    print(f"Train period: {train_df['timestamp'].iloc[0].date()} to {train_df['timestamp'].iloc[-1].date()} ({len(train_df)} rows)")
+    print(f"Test period: {test_df['timestamp'].iloc[0].date()} to {test_df['timestamp'].iloc[-1].date()} ({len(test_df)} rows)")
 
     # Train model on all train data
     features = [c for c in train_df.columns if c not in ['timestamp', 'next_output']]
@@ -312,17 +313,19 @@ def walkforward_backtest(df, test_days=7):
     model = RandomForestRegressor(n_estimators=100, random_state=42, max_depth=6)
     model.fit(X_train, y_train)
 
-    # Simulate trading on test week
+    # Simulate trading on test month
     cash = INITIAL_CASH
     asset = 0.0
     portfolio_values = []
     trades = []
+    step_log = []
     for i in range(len(test_df) - 1):
         row = test_df.iloc[i]
         X = row[features].values.reshape(1, -1)
         pred = model.predict(X)[0]
         current_price = row['close']
         pred_move = (pred - current_price) / current_price
+        action = 'HOLD'
         # Simple strategy: buy if up, sell if down
         if pred_move > 0.002 and cash > 0:
             buy_price = current_price * (1 + SLIPPAGE_RATE)
@@ -331,18 +334,23 @@ def walkforward_backtest(df, test_days=7):
             qty -= fee / buy_price
             asset += qty
             cash = 0
-            trades.append(('BUY', row['timestamp'], buy_price, qty, fee))
+            action = 'BUY'
+            trades.append({'action': 'BUY', 'date': row['timestamp'], 'price': buy_price, 'qty': qty, 'fee': fee, 'portfolio': cash + asset * current_price})
         elif pred_move < -0.002 and asset > 0:
             sell_price = current_price * (1 - SLIPPAGE_RATE)
             fee = asset * sell_price * FEE_RATE
             cash += asset * sell_price - fee
-            trades.append(('SELL', row['timestamp'], sell_price, asset, fee))
+            action = 'SELL'
+            trades.append({'action': 'SELL', 'date': row['timestamp'], 'price': sell_price, 'qty': asset, 'fee': fee, 'portfolio': cash})
             asset = 0
-        portfolio_values.append(cash + asset * current_price)
+        portfolio_value = cash + asset * current_price
+        portfolio_values.append(portfolio_value)
+        step_log.append({'date': row['timestamp'], 'price': current_price, 'pred': pred, 'pred_move': pred_move, 'action': action, 'portfolio': portfolio_value})
+        print(f"{row['timestamp']} | Price: {current_price:.2f} | Pred: {pred:.2f} | Move: {pred_move:+.4f} | Action: {action} | Portfolio: {portfolio_value:.2f}")
     # Final value
     final_price = test_df.iloc[-1]['close']
     final_value = cash + asset * final_price
-    return portfolio_values, trades, final_value, test_df
+    return portfolio_values, trades, final_value, test_df, step_log
 
 def main():
     """Main backtesting function with advanced strategy."""
@@ -353,35 +361,38 @@ def main():
     print("Fetching historical SPY data...")
     df = fetch_historical_data('SPY', days=365)
     print(f"Fetched {len(df)} days of data")
+    df = prepare_ml_data(df)  # Ensure features and next_output are present
     
     if len(df) < 100:
         print("Not enough historical data for backtesting")
         return
     
     # Run backtest
-    print("Running walk-forward out-of-sample backtest (last week)...")
-    portfolio_values, trades, final_value, test_df = walkforward_backtest(df, test_days=TEST_DAYS)
-    print(f"Final portfolio value: ${final_value:,.2f}")
+    print(f"Running walk-forward out-of-sample backtest (last {TEST_DAYS} days)...")
+    portfolio_values, trades, final_value, test_df, step_log = walkforward_backtest(df, test_days=TEST_DAYS)
+    print(f"\nFinal portfolio value: ${final_value:,.2f}")
     print(f"Total trades: {len(trades)}")
     for t in trades:
-        print(f"{t[0]} | {t[1]} | Price: {t[2]:.2f} | Qty: {t[3]:.6f} | Fee: {t[4]:.2f}")
-    
-    # Plot results
+        print(f"TRADE | {t['action']} | {t['date']} | Price: {t['price']:.2f} | Qty: {t['qty']:.6f} | Fee: {t['fee']:.2f} | Portfolio: {t['portfolio']:.2f}")
+    # Save trade log
+    pd.DataFrame(trades).to_csv('spy_walkforward_trades.csv', index=False)
+    pd.DataFrame(step_log).to_csv('spy_walkforward_steps.csv', index=False)
+    print('Saved trade log as spy_walkforward_trades.csv and step log as spy_walkforward_steps.csv')
+    # Plot
     plt.figure(figsize=(12,6))
     plt.plot(test_df['timestamp'][:len(portfolio_values)], portfolio_values)
-    plt.title('Portfolio Value Over Test Week (SPY)')
+    plt.title('Portfolio Value Over Test Month (SPY)')
     plt.xlabel('Date')
     plt.ylabel('Portfolio Value (USD)')
     plt.tight_layout()
     plt.savefig('spy_walkforward_portfolio.png')
     print('Saved plot as spy_walkforward_portfolio.png')
-    
     # Stats
     returns = pd.Series(portfolio_values).pct_change().dropna()
     sharpe = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
-    print(f"Sharpe ratio (test week): {sharpe:.2f}")
+    print(f"Sharpe ratio (test month): {sharpe:.2f}")
     total_return = (final_value - INITIAL_CASH) / INITIAL_CASH * 100
-    print(f"Total return (test week): {total_return:.2f}%")
+    print(f"Total return (test month): {total_return:.2f}%")
 
 if __name__ == '__main__':
     main() 
