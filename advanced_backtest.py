@@ -4,6 +4,7 @@ from sklearn.ensemble import RandomForestRegressor
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import requests
 
 # --- Simulation Settings ---
 DATA_FILE = 'project3/data/bitcoin_usd.csv'
@@ -77,6 +78,26 @@ def prepare_ml_data(df):
     ml_df['next_output'] = ml_df['close'].shift(-1)
     ml_df = ml_df.dropna()
     return ml_df
+
+def fetch_coingecko_data(symbol='bitcoin', vs_currency='usd', days=1):
+    url = f'https://api.coingecko.com/api/v3/coins/{symbol}/market_chart'
+    params = {
+        'vs_currency': vs_currency,
+        'days': days
+    }
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (compatible; BitcoinBot/1.0; +https://github.com/yourusername/bitcoinbot)'
+    }
+    response = requests.get(url, params=params, headers=headers)
+    response.raise_for_status()
+    data = response.json()
+    df = pd.DataFrame(data['prices'], columns=['timestamp', 'close'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df['open'] = df['close'].shift(1)
+    df['high'] = df[['open', 'close']].max(axis=1)
+    df['low'] = df[['open', 'close']].min(axis=1)
+    df = df.dropna().reset_index(drop=True)
+    return df
 
 # Load data
 df = pd.read_csv(DATA_FILE, parse_dates=['timestamp'])
