@@ -78,7 +78,7 @@ def walkforward_backtest(df, test_days=7):
     trades = []
     for i in range(len(test_df) - 1):
         row = test_df.iloc[i]
-        X = row[features].values.reshape(1, -1)
+        X = pd.DataFrame([row[features].values], columns=features)
         pred = model.predict(X)[0]
         current_price = row['close']
         pred_move = (pred - current_price) / current_price

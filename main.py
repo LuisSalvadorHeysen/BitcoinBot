@@ -107,7 +107,7 @@ def train_model(df):
 def predict_price(model, df):
     """Predict the next price using the trained model."""
     ml_df = prepare_ml_data(df)
-    X_pred = ml_df.iloc[-1][['close', 'high', 'low', 'open']].values.reshape(1, -1)
+    X_pred = pd.DataFrame([ml_df.iloc[-1][['close', 'high', 'low', 'open']].values], columns=['close', 'high', 'low', 'open'])
     return model.predict(X_pred)[0]
 
 def main():
