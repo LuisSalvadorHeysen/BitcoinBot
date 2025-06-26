@@ -163,6 +163,12 @@ This project demonstrates:
 
 ---
 
+### ⚠️ Note on Performance Metrics
+
+The reported returns and Sharpe ratios are calculated over relatively short out-of-sample testing periods (7 days for BTC/USD and 30 days for SPY) with limited trade counts (6 and 9 trades respectively). While these results demonstrate promising model behavior and risk-adjusted performance, they should be interpreted with caution due to the small sample size and limited live or paper trading data. Further extended testing and validation are recommended to assess robustness and real-world applicability.
+
+---
+
 ## 🤝 Contributing
 
 This is an educational project. Feel free to:
